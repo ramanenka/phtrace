@@ -1,29 +1,27 @@
-language: php
-# sudo: required
+language: c
 
 branches:
   only:
     - master
-    
-php:
-  - 7.0
-  
-before_install:
-  - sudo apt-get -qq update
-  - sudo apt-get install -y gdb
 
-before_script:
+before_install:
+  - sudo apt-get install python-software-properties -y
+  - sudo LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php -y
+  - sudo apt-get update -qq
+  - sudo apt-get install php7.0 php7.0-dev -y
+  - php --version
+
+install:
   - phpize
   - ./configure --enable-phtrace
   - make
-  
+
 script:
-  - ulimit -c unlimited
-  - ulimit -a
+#  - ulimit -c unlimited
+#  - ulimit -a
   - php -n -r ';'
-  - php -n -d extension=modules/phtrace.so
+  - php -n -d extension=modules/phtrace.so -r ';'
 #  - sudo echo "core" > /proc/sys/kernel/core_pattern
   - make test
-  - ls -lah
-  - gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" /home/travis/.phpenv/versions/7.0.8/bin/php core
+#  - gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" /home/travis/.phpenv/versions/7.0.8/bin/php core
 #  - php -n tests_integr/run.php
