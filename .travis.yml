@@ -1,0 +1,29 @@
+language: php
+# sudo: required
+
+branches:
+  only:
+    - master
+    
+php:
+  - 7.0
+  
+before_install:
+  - sudo apt-get -qq update
+  - sudo apt-get install -y gdb
+
+before_script:
+  - phpize
+  - ./configure --enable-phtrace
+  - make
+  
+script:
+  - ulimit -c unlimited
+  - ulimit -a
+  - php -n -r ';'
+  - php -n -d extension=modules/phtrace.so
+#  - sudo echo "core" > /proc/sys/kernel/core_pattern
+  - make test
+  - ls -lah
+  - gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" /home/travis/.phpenv/versions/7.0.8/bin/php core
+#  - php -n tests_integr/run.php
