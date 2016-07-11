@@ -41,6 +41,7 @@ extern zend_module_entry phtrace_module_entry;
 ZEND_BEGIN_MODULE_GLOBALS(phtrace)
 	zend_long  global_value;
 	char *global_string;
+	char *server_port;
 ZEND_END_MODULE_GLOBALS(phtrace)
 
 /* Always refer to the globals in your function as PHTRACE_G(variable).

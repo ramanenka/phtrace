@@ -8,7 +8,7 @@ before_install:
   - sudo apt-get install python-software-properties -y
   - sudo LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php -y
   - sudo apt-get update -qq
-  - sudo apt-get install php7.0 php7.0-dev -y
+  - sudo apt-get install php7.0 php7.0-cli php7.0-dev -y
   - php --version
 
 install:
@@ -24,4 +24,4 @@ script:
 #  - sudo echo "core" > /proc/sys/kernel/core_pattern
   - make test
 #  - gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" /home/travis/.phpenv/versions/7.0.8/bin/php core
-#  - php -n tests_integr/run.php
+  - php tests_int/001_test_connection.php
