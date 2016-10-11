@@ -65,3 +65,7 @@ tests/*/*.php
 tests/*/*.exp
 tests/*/*.log
 tests/*/*.sh
+
+.cproject
+.project
+.settings/

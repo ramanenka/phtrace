@@ -8,13 +8,15 @@ before_install:
   - sudo apt-get install python-software-properties -y
   - sudo LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php -y
   - sudo apt-get update -qq
-  - sudo apt-get install php7.0 php7.0-cli php7.0-dev uuid-dev -y
+  - sudo apt-get install php7.0 php7.0-cli php7.0-dev uuid uuid-dev -y
   - php --version
 
 install:
   - phpize
   - ./configure --enable-phtrace
+  - cat Makefile
   - make
+  - ldd modules/phtrace.so
 
 script:
 #  - ulimit -c unlimited
