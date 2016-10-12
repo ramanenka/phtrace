@@ -40,9 +40,9 @@ static void emit_event_function_call_end();
 ZEND_DECLARE_MODULE_GLOBALS(phtrace)
 
 struct {
-	size_t size;
-	size_t used;
-	unsigned char *data;
+    size_t size;
+    size_t used;
+    unsigned char *data;
 } buffer;
 
 static int le_phtrace;
@@ -100,10 +100,10 @@ PHP_RINIT_FUNCTION(phtrace)
 
 PHP_RSHUTDOWN_FUNCTION(phtrace)
 {
-	zend_execute_ex = _zend_execute_ex;
+    zend_execute_ex = _zend_execute_ex;
 
-	emit_event_request_end();
-	buffer_flush();
+    emit_event_request_end();
+    buffer_flush();
     return SUCCESS;
 }
 
@@ -143,9 +143,9 @@ ZEND_GET_MODULE(phtrace)
 
 
 static void phtrace_execute_ex(zend_execute_data *execute_data) {
-	emit_event_function_call_begin(execute_data);
-	_zend_execute_ex(execute_data);
-	emit_event_function_call_end();
+    emit_event_function_call_begin(execute_data);
+    _zend_execute_ex(execute_data);
+    emit_event_function_call_end();
 }
 
 static inline uint64_t rdtscp() {
@@ -194,193 +194,193 @@ static void connection_close() {
 
 static void buffer_allocate() {
 //	size_t size = 1024 * 1024 * 5;
-	size_t size = 16384;
-	buffer.data = (unsigned char *) malloc(size);
-	if (!buffer.data) {
-		printf("failed to allocate memory for the data buffer\n");
-	}
+    size_t size = 16384;
+    buffer.data = (unsigned char *) malloc(size);
+    if (!buffer.data) {
+        printf("failed to allocate memory for the data buffer\n");
+    }
 
-	buffer.size = size;
-	buffer.used = 0;
+    buffer.size = size;
+    buffer.used = 0;
 }
 
 static void buffer_free() {
-	if (buffer.data) {
-		free(buffer.data);
-		buffer.data = NULL;
-	}
+    if (buffer.data) {
+        free(buffer.data);
+        buffer.data = NULL;
+    }
 
-	buffer.size = 0;
-	buffer.used = 0;
+    buffer.size = 0;
+    buffer.used = 0;
 }
 
 static void buffer_flush() {
-	uint64_t used = buffer.used;
-	write(server_socket, &used, sizeof(uint64_t));
+    uint64_t used = buffer.used;
+    write(server_socket, &used, sizeof(uint64_t));
 
-	ssize_t written = write(server_socket, buffer.data, buffer.used);
-	printf("%ld of %lu bytes were written to the network\n", written, buffer.used);
-	if (written != buffer.used) {
-		printf("could not write buffer to the socket partially or completely\n");
-		printf("Error opening file: %s\n", strerror( errno ));
-	}
-	buffer.used = 0;
+    ssize_t written = write(server_socket, buffer.data, buffer.used);
+    printf("%ld of %lu bytes were written to the network\n", written, buffer.used);
+    if (written != buffer.used) {
+        printf("could not write buffer to the socket partially or completely\n");
+        printf("Error opening file: %s\n", strerror( errno ));
+    }
+    buffer.used = 0;
 }
 
 static void buffer_print_last_bytes(size_t n) {
-	for (int i = buffer.used - n; i < buffer.used; i++) {
-		printf("%02hhx ", buffer.data[i]);
-	}
+    for (int i = buffer.used - n; i < buffer.used; i++) {
+        printf("%02hhx ", buffer.data[i]);
+    }
 }
 
 static void emit_event_request_begin() {
-	size_t payloadLength = sizeof(uint64_t) + sizeof(uuid_t);
-	size_t eventLength = payloadLength + sizeof(pht_event_t) + sizeof(uint32_t);
+    size_t payloadLength = sizeof(uint64_t) + sizeof(uuid_t);
+    size_t eventLength = payloadLength + sizeof(pht_event_t) + sizeof(uint32_t);
 
-	if (buffer.used + eventLength >= buffer.size) {
-		buffer_flush();
-	}
+    if (buffer.used + eventLength >= buffer.size) {
+        buffer_flush();
+    }
 
-	// write event type
-	*(buffer.data + buffer.used) = PHT_EVENT_REQUEST_BEGIN;
-	buffer.used += sizeof(pht_event_t);
+    // write event type
+    *(buffer.data + buffer.used) = PHT_EVENT_REQUEST_BEGIN;
+    buffer.used += sizeof(pht_event_t);
 //	buffer_print_last_bytes(sizeof(pht_event_t));
 
-	// write payload size
-	uint32_t *payloadLengthVar = (uint32_t *) (buffer.data + buffer.used);
-	*payloadLengthVar = payloadLength;
-	buffer.used += sizeof(uint32_t);
+    // write payload size
+    uint32_t *payloadLengthVar = (uint32_t *) (buffer.data + buffer.used);
+    *payloadLengthVar = payloadLength;
+    buffer.used += sizeof(uint32_t);
 //	buffer_print_last_bytes(sizeof(uint32_t));
 
-	// write tsc
-	uint64_t *rdtscpvar = (uint64_t *) (buffer.data + buffer.used);
-	*rdtscpvar = rdtscp();
-	buffer.used += sizeof(uint64_t);
+    // write tsc
+    uint64_t *rdtscpvar = (uint64_t *) (buffer.data + buffer.used);
+    *rdtscpvar = rdtscp();
+    buffer.used += sizeof(uint64_t);
 //	buffer_print_last_bytes(sizeof(uint64_t));
 
-	// write request uuid
-	uuid_generate(buffer.data + buffer.used);
-	buffer.used += sizeof(uuid_t);
+    // write request uuid
+    uuid_generate(buffer.data + buffer.used);
+    buffer.used += sizeof(uuid_t);
 //	buffer_print_last_bytes(sizeof(uuid_t));
 
 //	puts("");
 }
 
 static void emit_event_request_end() {
-	size_t payloadLength = sizeof(uint64_t);
-	size_t eventLength = payloadLength + sizeof(pht_event_t) + sizeof(uint32_t);
+    size_t payloadLength = sizeof(uint64_t);
+    size_t eventLength = payloadLength + sizeof(pht_event_t) + sizeof(uint32_t);
 
-	if (buffer.used + eventLength >= buffer.size) {
-		buffer_flush();
-	}
+    if (buffer.used + eventLength >= buffer.size) {
+        buffer_flush();
+    }
 
-	// write event type
-	*(buffer.data + buffer.used) = PHT_EVENT_REQUEST_END;
-	buffer.used += sizeof(pht_event_t);
+    // write event type
+    *(buffer.data + buffer.used) = PHT_EVENT_REQUEST_END;
+    buffer.used += sizeof(pht_event_t);
 //	buffer_print_last_bytes(sizeof(pht_event_t));
 
-	// write payload size
-	uint32_t *payloadLengthVar = (uint32_t *) (buffer.data + buffer.used);
-	*payloadLengthVar = payloadLength;
-	buffer.used += sizeof(uint32_t);
+    // write payload size
+    uint32_t *payloadLengthVar = (uint32_t *) (buffer.data + buffer.used);
+    *payloadLengthVar = payloadLength;
+    buffer.used += sizeof(uint32_t);
 //	buffer_print_last_bytes(sizeof(uint32_t));
 
-	// write tsc
-	uint64_t *rdtscpvar = (uint64_t *) (buffer.data + buffer.used);
-	*rdtscpvar = rdtscp();
-	buffer.used += sizeof(uint64_t);
+    // write tsc
+    uint64_t *rdtscpvar = (uint64_t *) (buffer.data + buffer.used);
+    *rdtscpvar = rdtscp();
+    buffer.used += sizeof(uint64_t);
 //	buffer_print_last_bytes(sizeof(uint64_t));
 
 //	puts("");
 }
 
 static void emit_event_function_call_begin(zend_execute_data *execute_data) {
-	size_t nameLength = 0;
-	if (EX(func)->common.function_name) {
-		nameLength += EX(func)->common.function_name->len;
-		if (EX(func)->common.scope) {
-			nameLength += EX(func)->common.scope->name->len;
-			nameLength += 2;
-		}
-	} else {
-		nameLength += EX(func)->op_array.filename->len;
-	}
-	nameLength += 1;
+    size_t nameLength = 0;
+    if (EX(func)->common.function_name) {
+        nameLength += EX(func)->common.function_name->len;
+        if (EX(func)->common.scope) {
+            nameLength += EX(func)->common.scope->name->len;
+            nameLength += 2;
+        }
+    } else {
+        nameLength += EX(func)->op_array.filename->len;
+    }
+    nameLength += 1;
 
-	size_t payloadLength = sizeof(uint64_t) + sizeof(uint16_t) + nameLength;
-	size_t eventLength = payloadLength + sizeof(pht_event_t) + sizeof(uint32_t);
+    size_t payloadLength = sizeof(uint64_t) + sizeof(uint16_t) + nameLength;
+    size_t eventLength = payloadLength + sizeof(pht_event_t) + sizeof(uint32_t);
 
-	if (buffer.used + eventLength >= buffer.size) {
-		buffer_flush();
-	}
+    if (buffer.used + eventLength >= buffer.size) {
+        buffer_flush();
+    }
 
-	// write event type
-	*(buffer.data + buffer.used) = PHT_EVENT_FUNCTION_BEGIN;
-	buffer.used += sizeof(pht_event_t);
+    // write event type
+    *(buffer.data + buffer.used) = PHT_EVENT_FUNCTION_BEGIN;
+    buffer.used += sizeof(pht_event_t);
 //	buffer_print_last_bytes(sizeof(pht_event_t));
 
-	// write payload size
-	uint32_t *payloadLengthVar = (uint32_t *) (buffer.data + buffer.used);
-	*payloadLengthVar = payloadLength;
-	buffer.used += sizeof(uint32_t);
+    // write payload size
+    uint32_t *payloadLengthVar = (uint32_t *) (buffer.data + buffer.used);
+    *payloadLengthVar = payloadLength;
+    buffer.used += sizeof(uint32_t);
 //	buffer_print_last_bytes(sizeof(uint32_t));
 
-	// write tsc
-	uint64_t *rdtscpvar = (uint64_t *) (buffer.data + buffer.used);
-	*rdtscpvar = rdtscp();
-	buffer.used += sizeof(uint64_t);
+    // write tsc
+    uint64_t *rdtscpvar = (uint64_t *) (buffer.data + buffer.used);
+    *rdtscpvar = rdtscp();
+    buffer.used += sizeof(uint64_t);
 //	buffer_print_last_bytes(sizeof(uint64_t));
 
-	uint16_t *p_name_length = (uint16_t *) (buffer.data + buffer.used);
-	*p_name_length = nameLength;
-	buffer.used += sizeof(uint16_t);
+    uint16_t *p_name_length = (uint16_t *) (buffer.data + buffer.used);
+    *p_name_length = nameLength;
+    buffer.used += sizeof(uint16_t);
 
-	// write name
-	if (EX(func)->common.function_name) {
-		if (EX(func)->common.scope) {
-			snprintf(
-				(char *) buffer.data + buffer.used,
-				nameLength,
-				EX(This).value.obj ? "%s->%s" : "%s::%s",
-				EX(func)->common.scope->name->val,
-				EX(func)->common.function_name->val
-			);
-		} else {
-			strncpy((char *) buffer.data + buffer.used, EX(func)->common.function_name->val, nameLength);
-		}
-	} else {
-		strncpy((char *) buffer.data + buffer.used, EX(func)->op_array.filename->val, nameLength);
-	}
+    // write name
+    if (EX(func)->common.function_name) {
+        if (EX(func)->common.scope) {
+            snprintf(
+                (char *) buffer.data + buffer.used,
+                nameLength,
+                EX(This).value.obj ? "%s->%s" : "%s::%s",
+                EX(func)->common.scope->name->val,
+                EX(func)->common.function_name->val
+            );
+        } else {
+            strncpy((char *) buffer.data + buffer.used, EX(func)->common.function_name->val, nameLength);
+        }
+    } else {
+        strncpy((char *) buffer.data + buffer.used, EX(func)->op_array.filename->val, nameLength);
+    }
 
-	buffer.used += nameLength;
+    buffer.used += nameLength;
 //	buffer_print_last_bytes(nameLength);
 
 //	puts("");
 }
 
 static void emit_event_function_call_end() {
-	size_t payloadLength = sizeof(uint64_t);
-	size_t eventLength = payloadLength + sizeof(pht_event_t) + sizeof(uint32_t);
+    size_t payloadLength = sizeof(uint64_t);
+    size_t eventLength = payloadLength + sizeof(pht_event_t) + sizeof(uint32_t);
 
-	if (buffer.used + eventLength >= buffer.size) {
-		buffer_flush();
-	}
+    if (buffer.used + eventLength >= buffer.size) {
+        buffer_flush();
+    }
 
-	// write event type
-	*(buffer.data + buffer.used) = PHT_EVENT_FUNCTION_END;
-	buffer.used += sizeof(pht_event_t);
+    // write event type
+    *(buffer.data + buffer.used) = PHT_EVENT_FUNCTION_END;
+    buffer.used += sizeof(pht_event_t);
 //	buffer_print_last_bytes(sizeof(pht_event_t));
 
-	// write payload size
-	uint32_t *payloadLengthVar = (uint32_t *) (buffer.data + buffer.used);
-	*payloadLengthVar = payloadLength;
-	buffer.used += sizeof(uint32_t);
+    // write payload size
+    uint32_t *payloadLengthVar = (uint32_t *) (buffer.data + buffer.used);
+    *payloadLengthVar = payloadLength;
+    buffer.used += sizeof(uint32_t);
 //	buffer_print_last_bytes(sizeof(uint32_t));
 
-	// write tsc
-	uint64_t *rdtscpvar = (uint64_t *) (buffer.data + buffer.used);
-	*rdtscpvar = rdtscp();
-	buffer.used += sizeof(uint64_t);
+    // write tsc
+    uint64_t *rdtscpvar = (uint64_t *) (buffer.data + buffer.used);
+    *rdtscpvar = rdtscp();
+    buffer.used += sizeof(uint64_t);
 //	buffer_print_last_bytes(sizeof(uint64_t));
 //	puts("");
 }
