@@ -34,8 +34,8 @@ static void buffer_print_last_bytes(size_t);
 
 static void emit_event_request_begin();
 static void emit_event_request_end();
-static void emit_event_function_call_begin(uint32_t, zend_execute_data *);
-static void emit_event_function_call_end(uint32_t);
+static void emit_event_function_call_begin(zend_execute_data *);
+static void emit_event_function_call_end();
 
 ZEND_DECLARE_MODULE_GLOBALS(phtrace)
 
@@ -47,7 +47,6 @@ struct {
 
 static int le_phtrace;
 static int server_socket = 0;
-static uint32_t function_call_n = 0;
 
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("phtrace.global_value",      "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_phtrace_globals, phtrace_globals)
@@ -91,8 +90,6 @@ PHP_RINIT_FUNCTION(phtrace)
 #if defined(COMPILE_DL_PHTRACE) && defined(ZTS)
     ZEND_TSRMLS_CACHE_UPDATE();
 #endif
-
-    function_call_n = 0;
 
     _zend_execute_ex = zend_execute_ex;
     zend_execute_ex = phtrace_execute_ex;
@@ -146,11 +143,9 @@ ZEND_GET_MODULE(phtrace)
 
 
 static void phtrace_execute_ex(zend_execute_data *execute_data) {
-	function_call_n++;
-	uint32_t current_function_call_number = function_call_n;
-	emit_event_function_call_begin(current_function_call_number, execute_data);
+	emit_event_function_call_begin(execute_data);
 	_zend_execute_ex(execute_data);
-	emit_event_function_call_end(current_function_call_number);
+	emit_event_function_call_end();
 }
 
 static inline uint64_t rdtscp() {
@@ -299,7 +294,7 @@ static void emit_event_request_end() {
 //	puts("");
 }
 
-static void emit_event_function_call_begin(uint32_t function_call_n, zend_execute_data *execute_data) {
+static void emit_event_function_call_begin(zend_execute_data *execute_data) {
 	size_t nameLength = 0;
 	if (EX(func)->common.function_name) {
 		nameLength += EX(func)->common.function_name->len;
@@ -312,7 +307,7 @@ static void emit_event_function_call_begin(uint32_t function_call_n, zend_execut
 	}
 	nameLength += 1;
 
-	size_t payloadLength = sizeof(uint64_t) + sizeof(uint32_t) + nameLength;
+	size_t payloadLength = sizeof(uint64_t) + sizeof(uint16_t) + nameLength;
 	size_t eventLength = payloadLength + sizeof(pht_event_t) + sizeof(uint32_t);
 
 	if (buffer.used + eventLength >= buffer.size) {
@@ -336,11 +331,9 @@ static void emit_event_function_call_begin(uint32_t function_call_n, zend_execut
 	buffer.used += sizeof(uint64_t);
 //	buffer_print_last_bytes(sizeof(uint64_t));
 
-	// write function call number
-	uint32_t *p_function_call_n = (uint32_t *) (buffer.data + buffer.used);
-	*p_function_call_n = function_call_n;
-	buffer.used += sizeof(uint32_t);
-//	buffer_print_last_bytes(sizeof(uint32_t));
+	uint16_t *p_name_length = (uint16_t *) (buffer.data + buffer.used);
+	*p_name_length = nameLength;
+	buffer.used += sizeof(uint16_t);
 
 	// write name
 	if (EX(func)->common.function_name) {
@@ -365,8 +358,8 @@ static void emit_event_function_call_begin(uint32_t function_call_n, zend_execut
 //	puts("");
 }
 
-static void emit_event_function_call_end(uint32_t function_call_n) {
-	size_t payloadLength = sizeof(uint64_t) + sizeof(uint32_t);
+static void emit_event_function_call_end() {
+	size_t payloadLength = sizeof(uint64_t);
 	size_t eventLength = payloadLength + sizeof(pht_event_t) + sizeof(uint32_t);
 
 	if (buffer.used + eventLength >= buffer.size) {
@@ -389,14 +382,6 @@ static void emit_event_function_call_end(uint32_t function_call_n) {
 	*rdtscpvar = rdtscp();
 	buffer.used += sizeof(uint64_t);
 //	buffer_print_last_bytes(sizeof(uint64_t));
-
-	// write function call number
-	uint32_t *p_function_call_n = (uint32_t *) (buffer.data + buffer.used);
-	*p_function_call_n = function_call_n;
-	buffer.used += sizeof(uint32_t);
-//	buffer_print_last_bytes(sizeof(uint32_t));
-
-
 //	puts("");
 }
 
