@@ -1,5 +1,9 @@
 language: c
 
+env:
+  - PHTRACE_PHP_VERSION=7.0
+  - PHTRACE_PHP_VERSION=7.1
+
 branches:
   only:
     - master
@@ -8,7 +12,7 @@ before_install:
   - sudo apt-get install python-software-properties -y
   - sudo LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php -y
   - sudo apt-get update -qq
-  - sudo apt-get install php7.0 php7.0-cli php7.0-dev uuid uuid-dev -y
+  - sudo apt-get install php$PHTRACE_PHP_VERSION php$PHTRACE_PHP_VERSION-cli php$PHTRACE_PHP_VERSION-dev uuid uuid-dev -y
   - php --version
 
 install:
