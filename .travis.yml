@@ -30,4 +30,3 @@ script:
 #  - sudo echo "core" > /proc/sys/kernel/core_pattern
   - make test
 #  - gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" /home/travis/.phpenv/versions/7.0.8/bin/php core
-  - php tests_int/001_test_connection.php
