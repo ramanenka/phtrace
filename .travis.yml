@@ -1,8 +1,8 @@
 language: c
 
 env:
-  - PHP_PACKAGE=php7.0
-  - PHP_PACKAGE=php7.1
+  - PHP_VERSION=7.0
+  - PHP_VERSION=7.1
 
 branches:
   only:
@@ -12,8 +12,17 @@ before_install:
   - sudo apt-get install python-software-properties -y
   - sudo LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php -y
   - sudo apt-get update -qq
-  - sudo apt-get install $PHP_PACKAGE $PHP_PACKAGE-cli $PHP_PACKAGE-dev uuid uuid-dev -y
+  - |
+    sudo apt-get install -y \
+      php$PHP_VERSION \
+      php$PHP_VERSION-cli \
+      php$PHP_VERSION-dev \
+      uuid \
+      uuid-dev \
+      gdb
   - php --version
+  - ulimit -c unlimited
+  - ulimit -a
 
 install:
   - phpize
@@ -23,10 +32,16 @@ install:
   - ldd modules/phtrace.so
 
 script:
-#  - ulimit -c unlimited
-#  - ulimit -a
   - php -n -r ';'
-  - php -n -d extension=modules/phtrace.so -r ';'
-#  - sudo echo "core" > /proc/sys/kernel/core_pattern
+  - |
+    php -n -d extension=modules/phtrace.so -r ';' \
+    || (\
+      export PREV_EXIT_CODE=$? \
+      gdb --batch --quiet \
+        -ex "thread apply all bt full" \
+        -ex "quit" \
+        `which php` core; \
+      exit $PREV_EXIT_CODE \
+    )
+
   - make test
-#  - gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" /home/travis/.phpenv/versions/7.0.8/bin/php core
