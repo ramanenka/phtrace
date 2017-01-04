@@ -82,7 +82,7 @@ PHP_FUNCTION(confirm_phtrace_compiled)
 PHP_MINIT_FUNCTION(phtrace)
 {
     REGISTER_INI_ENTRIES();
-    zend_hash_init(&stringsCache, 1000, NULL, NULL, 0);
+    ZEND_INIT_SYMTABLE_EX(&stringsCache, 1000, 1);
     buffer_allocate();
     return SUCCESS;
 }
@@ -114,6 +114,7 @@ PHP_RSHUTDOWN_FUNCTION(phtrace)
     zend_execute_ex = _zend_execute_ex;
 
     buffer_flush();
+    zend_hash_clean(&stringsCache);
 
     if (f) {
       fclose(f);
@@ -240,7 +241,7 @@ static inline uint32_t emit_event_data_zstr_cached(zend_string *s) {
         return Z_LVAL_P(cached);
     } else {
         zval n;
-        Z_LVAL(n) = emit_event_data_zstr(s);
+        ZVAL_LONG(&n, emit_event_data_zstr(s));
         zend_hash_add_new(&stringsCache, s, &n);
         return Z_LVAL(n);
     }
