@@ -26,8 +26,7 @@ before_install:
 
 install:
   - phpize
-  - ./configure --enable-phtrace
-  - cat Makefile
+  - ./configure
   - make
   - ldd modules/phtrace.so
 
@@ -43,5 +42,4 @@ script:
         `which php` core; \
       exit $PREV_EXIT_CODE \
     )
-
   - make test
