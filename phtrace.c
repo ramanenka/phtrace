@@ -56,6 +56,7 @@ static int le_phtrace;
 
 FILE *f;
 uint32_t stringCounter;
+HashTable stringsCache;
 
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("phtrace.global_value",      "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_phtrace_globals, phtrace_globals)
@@ -81,6 +82,7 @@ PHP_FUNCTION(confirm_phtrace_compiled)
 PHP_MINIT_FUNCTION(phtrace)
 {
     REGISTER_INI_ENTRIES();
+    zend_hash_init(&stringsCache, 1000, NULL, NULL, 0);
     buffer_allocate();
     return SUCCESS;
 }
@@ -88,6 +90,7 @@ PHP_MINIT_FUNCTION(phtrace)
 PHP_MSHUTDOWN_FUNCTION(phtrace)
 {
     buffer_free();
+    zend_hash_destroy(&stringsCache);
     UNREGISTER_INI_ENTRIES();
     return SUCCESS;
 }
@@ -232,9 +235,15 @@ static inline uint32_t emit_event_data_zstr(zend_string *s) {
 }
 
 static inline uint32_t emit_event_data_zstr_cached(zend_string *s) {
-    // TODO: check first if it's an interned string (LIKELY!)
-    // and check if it was already written to the buffer
-    return 0;
+    zval *cached = zend_hash_find(&stringsCache, s);
+    if (cached) {
+        return Z_LVAL_P(cached);
+    } else {
+        zval n;
+        Z_LVAL(n) = emit_event_data_zstr(s);
+        zend_hash_add_new(&stringsCache, s, &n);
+        return Z_LVAL(n);
+    }
 }
 
 static inline EventFunctionCallBegin *alloc_event_function_call_begin() {
@@ -254,7 +263,7 @@ static inline EventFunctionCallBegin *alloc_event_function_call_begin() {
 static inline void emit_event_function_call_begin(zend_execute_data *execute_data) {
     EventFunctionCallBegin *e = alloc_event_function_call_begin();
     e->tsc = rdtscp();
-    emit_event_data_zstr(EX(func)->op_array.filename);
+    emit_event_data_zstr_cached(EX(func)->op_array.filename);
 }
 
 static inline void emit_event_function_call_end() {
