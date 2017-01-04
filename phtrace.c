@@ -16,6 +16,7 @@
 #define PHT_EVENT_REQUEST_END    2
 #define PHT_EVENT_FUNCTION_BEGIN 3
 #define PHT_EVENT_FUNCTION_END   4
+#define PHT_EVENT_DATA_STR       5
 
 typedef unsigned char pht_event_t;
 
@@ -31,10 +32,12 @@ static inline uint64_t rdtscp();
 static void buffer_allocate();
 static void buffer_free();
 static void buffer_flush();
+static inline void buffer_ensure_size(size_t);
 static void buffer_print_last_bytes(size_t);
 
 static inline EventFunctionCallBegin *alloc_event_function_call_begin();
 
+static inline uint32_t emit_event_data_zstr(zend_string *);
 static inline void emit_event_function_call_begin(zend_execute_data *);
 static inline void emit_event_function_call_end();
 
@@ -201,13 +204,32 @@ static void buffer_print_last_bytes(size_t n) {
     }
 }
 
-static inline EventFunctionCallBegin *alloc_event_function_call_begin() {
-    EventFunctionCallBegin *result;
-
-    int size = 1 + sizeof(EventFunctionCallBegin);
+static inline void buffer_ensure_size(size_t size) {
     if (buffer.size - size < buffer.used) {
         buffer_flush();
     }
+}
+
+static inline uint32_t emit_event_data_zstr(zend_string *s) {
+    // TODO: check first if it's an interned string (LIKELY!)
+    // and check if it was already written to the buffer
+
+    buffer_ensure_size(1 + ZSTR_LEN(s) + 1);
+    buffer.data[buffer.used] = PHT_EVENT_DATA_STR;
+    buffer.used++;
+
+    strncpy((char *)(buffer.data + buffer.used), ZSTR_VAL(s), ZSTR_LEN(s) + 1);
+
+    buffer.used += ZSTR_LEN(s) + 1;
+
+    // TODO: return string number
+    return 0;
+}
+
+static inline EventFunctionCallBegin *alloc_event_function_call_begin() {
+    EventFunctionCallBegin *result;
+
+    buffer_ensure_size(1 + sizeof(EventFunctionCallBegin));
 
     buffer.data[buffer.used] = PHT_EVENT_FUNCTION_BEGIN;
     buffer.used++;
@@ -221,6 +243,9 @@ static inline EventFunctionCallBegin *alloc_event_function_call_begin() {
 static inline void emit_event_function_call_begin(zend_execute_data *execute_data) {
     EventFunctionCallBegin *e = alloc_event_function_call_begin();
     e->tsc = rdtscp();
+    if (EX(func)->common.function_name) {
+      emit_event_data_zstr(EX(func)->common.function_name);
+    }
 }
 
 static inline void emit_event_function_call_end() {
