@@ -22,7 +22,6 @@ before_install:
       gdb
   - php --version
   - ulimit -c unlimited
-  - ulimit -a
 
 install:
   - phpize
