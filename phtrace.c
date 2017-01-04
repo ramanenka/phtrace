@@ -52,6 +52,8 @@ struct {
     unsigned char *data;
 } buffer;
 
+#define BUFFER_CURRENT (buffer.data + buffer.used)
+
 static int le_phtrace;
 
 FILE *f;
@@ -226,10 +228,10 @@ static inline uint32_t emit_event_data_zstr(zend_string *s) {
     buffer.data[buffer.used] = PHT_EVENT_DATA_STR;
     buffer.used++;
 
-    *((uint32_t *)(buffer.data + buffer.used)) = stringCounter;
+    *((uint32_t *) BUFFER_CURRENT) = stringCounter;
     buffer.used += sizeof(uint32_t);
 
-    strncpy((char *)(buffer.data + buffer.used), ZSTR_VAL(s), ZSTR_LEN(s) + 1);
+    strncpy((char *) BUFFER_CURRENT, ZSTR_VAL(s), ZSTR_LEN(s) + 1);
     buffer.used += ZSTR_LEN(s) + 1;
 
     return stringCounter;
@@ -255,7 +257,7 @@ static inline EventFunctionCallBegin *alloc_event_function_call_begin() {
     buffer.data[buffer.used] = PHT_EVENT_FUNCTION_BEGIN;
     buffer.used++;
 
-    result = (EventFunctionCallBegin *)(buffer.data + buffer.used);
+    result = (EventFunctionCallBegin *) BUFFER_CURRENT;
     buffer.used += sizeof(EventFunctionCallBegin);
 
     return result;
