@@ -38,6 +38,8 @@ static void buffer_print_last_bytes(size_t);
 static inline EventFunctionCallBegin *alloc_event_function_call_begin();
 
 static inline uint32_t emit_event_data_zstr(zend_string *);
+static inline uint32_t emit_event_data_zstr_cached(zend_string *s);
+
 static inline void emit_event_function_call_begin(zend_execute_data *);
 static inline void emit_event_function_call_end();
 
@@ -53,6 +55,7 @@ struct {
 static int le_phtrace;
 
 FILE *f;
+uint32_t stringCounter;
 
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("phtrace.global_value",      "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_phtrace_globals, phtrace_globals)
@@ -94,6 +97,8 @@ PHP_RINIT_FUNCTION(phtrace)
 #if defined(COMPILE_DL_PHTRACE) && defined(ZTS)
     ZEND_TSRMLS_CACHE_UPDATE();
 #endif
+
+    stringCounter = 0;
 
     _zend_execute_ex = zend_execute_ex;
     zend_execute_ex = phtrace_execute_ex;
@@ -211,18 +216,24 @@ static inline void buffer_ensure_size(size_t size) {
 }
 
 static inline uint32_t emit_event_data_zstr(zend_string *s) {
-    // TODO: check first if it's an interned string (LIKELY!)
-    // and check if it was already written to the buffer
+    stringCounter++;
 
-    buffer_ensure_size(1 + ZSTR_LEN(s) + 1);
+    buffer_ensure_size(1 + sizeof(uint32_t) + ZSTR_LEN(s) + 1);
     buffer.data[buffer.used] = PHT_EVENT_DATA_STR;
     buffer.used++;
 
-    strncpy((char *)(buffer.data + buffer.used), ZSTR_VAL(s), ZSTR_LEN(s) + 1);
+    *((uint32_t *)(buffer.data + buffer.used)) = stringCounter;
+    buffer.used += sizeof(uint32_t);
 
+    strncpy((char *)(buffer.data + buffer.used), ZSTR_VAL(s), ZSTR_LEN(s) + 1);
     buffer.used += ZSTR_LEN(s) + 1;
 
-    // TODO: return string number
+    return stringCounter;
+}
+
+static inline uint32_t emit_event_data_zstr_cached(zend_string *s) {
+    // TODO: check first if it's an interned string (LIKELY!)
+    // and check if it was already written to the buffer
     return 0;
 }
 
@@ -243,9 +254,7 @@ static inline EventFunctionCallBegin *alloc_event_function_call_begin() {
 static inline void emit_event_function_call_begin(zend_execute_data *execute_data) {
     EventFunctionCallBegin *e = alloc_event_function_call_begin();
     e->tsc = rdtscp();
-    if (EX(func)->common.function_name) {
-      emit_event_data_zstr(EX(func)->common.function_name);
-    }
+    emit_event_data_zstr(EX(func)->op_array.filename);
 }
 
 static inline void emit_event_function_call_end() {
