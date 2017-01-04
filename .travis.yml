@@ -30,7 +30,6 @@ install:
   - ldd modules/phtrace.so
 
 script:
-  - php -n -r ';'
   - |
     php -n -d extension=modules/phtrace.so -r ';' \
     || (\
