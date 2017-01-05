@@ -28,6 +28,10 @@ typedef struct _EventFunctionCallBegin {
     uint32_t line_start;
 } EventFunctionCallBegin;
 
+typedef struct _EventFunctionCallEnd {
+    uint64_t tsc;
+} EventFunctionCallEnd;
+
 static void phtrace_execute_ex(zend_execute_data *);
 static void (*_zend_execute_ex) (zend_execute_data *);
 
@@ -40,6 +44,7 @@ static inline void buffer_ensure_size(size_t);
 static void buffer_print_last_bytes(size_t);
 
 static inline EventFunctionCallBegin *alloc_event_function_call_begin();
+static inline EventFunctionCallEnd *alloc_event_function_call_end();
 
 static inline uint32_t emit_event_data_zstr(zend_string *);
 static inline uint32_t emit_event_data_zstr_cached(zend_string *s);
@@ -267,6 +272,20 @@ static inline EventFunctionCallBegin *alloc_event_function_call_begin() {
     return result;
 }
 
+static inline EventFunctionCallEnd *alloc_event_function_call_end() {
+    EventFunctionCallEnd *result;
+
+    buffer_ensure_size(1 + sizeof(EventFunctionCallEnd));
+
+    buffer.data[buffer.used] = PHT_EVENT_FUNCTION_END;
+    buffer.used++;
+
+    result = (EventFunctionCallEnd *) BUFFER_CURRENT;
+    buffer.used += sizeof(EventFunctionCallEnd);
+
+    return result;
+}
+
 static inline void emit_event_function_call_begin(zend_execute_data *execute_data) {
     EventFunctionCallBegin *e = alloc_event_function_call_begin();
     e->tsc = rdtscp();
@@ -283,5 +302,6 @@ static inline void emit_event_function_call_begin(zend_execute_data *execute_dat
 }
 
 static inline void emit_event_function_call_end() {
-
+    EventFunctionCallEnd *e = alloc_event_function_call_end();
+    e->tsc = rdtscp();
 }
