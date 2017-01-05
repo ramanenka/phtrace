@@ -22,6 +22,10 @@ typedef unsigned char pht_event_t;
 
 typedef struct _EventFunctionCallBegin {
     uint64_t tsc;
+    uint32_t filename;
+    uint32_t function_name;
+    uint32_t class_name;
+    uint32_t line_start;
 } EventFunctionCallBegin;
 
 static void phtrace_execute_ex(zend_execute_data *);
@@ -266,7 +270,16 @@ static inline EventFunctionCallBegin *alloc_event_function_call_begin() {
 static inline void emit_event_function_call_begin(zend_execute_data *execute_data) {
     EventFunctionCallBegin *e = alloc_event_function_call_begin();
     e->tsc = rdtscp();
-    emit_event_data_zstr_cached(EX(func)->op_array.filename);
+    e->filename = emit_event_data_zstr_cached(EX(func)->op_array.filename);
+    e->line_start = EX(func)->op_array.line_start;
+    if (EX(func)->common.function_name) {
+        e->function_name = emit_event_data_zstr_cached(EX(func)->common.function_name);
+        e->class_name = EX(func)->common.scope ?
+            emit_event_data_zstr_cached(EX(func)->common.scope->name) :
+            0;
+    } else {
+        e->function_name = 0;
+    }
 }
 
 static inline void emit_event_function_call_end() {
