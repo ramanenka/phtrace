@@ -8,7 +8,7 @@ This extension is experimental. Please do not use it in production.
 
 ### Installation
 
-  phpize
-  ./configure
-  make
-  make install
+    phpize
+    ./configure
+    make
+    make install
