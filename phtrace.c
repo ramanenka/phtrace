@@ -20,6 +20,14 @@
 
 typedef unsigned char pht_event_t;
 
+struct {
+    pht_event_t EventFunctionCallBegin;
+    pht_event_t EventFunctionCallEnd;
+} EventTypes = {
+    PHT_EVENT_FUNCTION_BEGIN,
+    PHT_EVENT_FUNCTION_END
+};
+
 typedef struct _EventFunctionCallBegin {
     uint64_t tsc;
     uint32_t filename;
@@ -43,9 +51,6 @@ static void buffer_flush();
 static inline void buffer_ensure_size(size_t);
 static void buffer_print_last_bytes(size_t);
 
-static inline EventFunctionCallBegin *alloc_event_function_call_begin();
-static inline EventFunctionCallEnd *alloc_event_function_call_end();
-
 static inline uint32_t emit_event_data_zstr(zend_string *);
 static inline uint32_t emit_event_data_zstr_cached(zend_string *s);
 
@@ -62,6 +67,15 @@ struct {
 } buffer;
 
 #define BUFFER_CURRENT (buffer.data + buffer.used)
+
+#define ALLOC_EVENT(VAR, TYPE) \
+    do { \
+        buffer_ensure_size(1 + sizeof(TYPE)); \
+        buffer.data[buffer.used] = EventTypes.TYPE; \
+        buffer.used++; \
+        VAR = (TYPE *) BUFFER_CURRENT; \
+        buffer.used += sizeof(TYPE); \
+    } while(0)
 
 static int le_phtrace;
 
@@ -258,34 +272,6 @@ static inline uint32_t emit_event_data_zstr_cached(zend_string *s) {
     }
 }
 
-static inline EventFunctionCallBegin *alloc_event_function_call_begin() {
-    EventFunctionCallBegin *result;
-
-    buffer_ensure_size(1 + sizeof(EventFunctionCallBegin));
-
-    buffer.data[buffer.used] = PHT_EVENT_FUNCTION_BEGIN;
-    buffer.used++;
-
-    result = (EventFunctionCallBegin *) BUFFER_CURRENT;
-    buffer.used += sizeof(EventFunctionCallBegin);
-
-    return result;
-}
-
-static inline EventFunctionCallEnd *alloc_event_function_call_end() {
-    EventFunctionCallEnd *result;
-
-    buffer_ensure_size(1 + sizeof(EventFunctionCallEnd));
-
-    buffer.data[buffer.used] = PHT_EVENT_FUNCTION_END;
-    buffer.used++;
-
-    result = (EventFunctionCallEnd *) BUFFER_CURRENT;
-    buffer.used += sizeof(EventFunctionCallEnd);
-
-    return result;
-}
-
 static inline void emit_event_function_call_begin(zend_execute_data *execute_data) {
     uint32_t filename = emit_event_data_zstr_cached(EX(func)->op_array.filename);
     uint32_t function_name = 0;
@@ -297,7 +283,9 @@ static inline void emit_event_function_call_begin(zend_execute_data *execute_dat
         }
     }
 
-    EventFunctionCallBegin *e = alloc_event_function_call_begin();
+    EventFunctionCallBegin *e;
+    ALLOC_EVENT(e, EventFunctionCallBegin);
+
     e->tsc = rdtscp();
     e->filename = filename;
     e->function_name = function_name;
@@ -306,6 +294,7 @@ static inline void emit_event_function_call_begin(zend_execute_data *execute_dat
 }
 
 static inline void emit_event_function_call_end() {
-    EventFunctionCallEnd *e = alloc_event_function_call_end();
+    EventFunctionCallEnd *e;
+    ALLOC_EVENT(e, EventFunctionCallEnd);
     e->tsc = rdtscp();
 }
