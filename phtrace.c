@@ -12,20 +12,23 @@
 
 #include "php_phtrace.h"
 
-#define PHT_EVENT_REQUEST_BEGIN  1
-#define PHT_EVENT_REQUEST_END    2
-#define PHT_EVENT_FUNCTION_BEGIN 3
-#define PHT_EVENT_FUNCTION_END   4
-#define PHT_EVENT_DATA_STR       5
+#define PHT_EVENT_REQUEST_BEGIN             1
+#define PHT_EVENT_REQUEST_END               2
+#define PHT_EVENT_FUNCTION_BEGIN            3
+#define PHT_EVENT_INTERNAL_FUNCTION_BEGIN   6
+#define PHT_EVENT_FUNCTION_END              4
+#define PHT_EVENT_DATA_STR                  5
 
 typedef unsigned char pht_event_t;
 
 struct {
     pht_event_t EventFunctionCallBegin;
     pht_event_t EventFunctionCallEnd;
+    pht_event_t EventInternalFunctionCallBegin;
 } EventTypes = {
     PHT_EVENT_FUNCTION_BEGIN,
-    PHT_EVENT_FUNCTION_END
+    PHT_EVENT_FUNCTION_END,
+    PHT_EVENT_INTERNAL_FUNCTION_BEGIN
 };
 
 typedef struct _EventFunctionCallBegin {
@@ -36,12 +39,20 @@ typedef struct _EventFunctionCallBegin {
     uint32_t line_start;
 } EventFunctionCallBegin;
 
+typedef struct _EventInternalFunctionCallBegin {
+    uint64_t tsc;
+    uint32_t function_name;
+    uint32_t class_name;
+} EventInternalFunctionCallBegin;
+
 typedef struct _EventFunctionCallEnd {
     uint64_t tsc;
 } EventFunctionCallEnd;
 
 static void phtrace_execute_ex(zend_execute_data *);
 static void (*_zend_execute_ex) (zend_execute_data *);
+static void phtrace_execute_internal(zend_execute_data *, zval *);
+static void (*_zend_execute_internal)(zend_execute_data *, zval *);
 
 static inline uint64_t rdtscp();
 
@@ -55,10 +66,10 @@ static inline uint32_t emit_event_data_zstr(zend_string *);
 static inline uint32_t emit_event_data_zstr_cached(zend_string *s);
 
 static inline void emit_event_function_call_begin(zend_execute_data *);
+static inline void emit_event_internal_function_call_begin(zend_execute_data *);
 static inline void emit_event_function_call_end();
 
 ZEND_DECLARE_MODULE_GLOBALS(phtrace)
-
 
 struct {
     size_t size;
@@ -68,13 +79,13 @@ struct {
 
 #define BUFFER_CURRENT (buffer.data + buffer.used)
 
-#define ALLOC_EVENT(VAR, TYPE) \
-    do { \
-        buffer_ensure_size(1 + sizeof(TYPE)); \
+#define ALLOC_EVENT(VAR, TYPE)                      \
+    do {                                            \
+        buffer_ensure_size(1 + sizeof(TYPE));       \
         buffer.data[buffer.used] = EventTypes.TYPE; \
-        buffer.used++; \
-        VAR = (TYPE *) BUFFER_CURRENT; \
-        buffer.used += sizeof(TYPE); \
+        buffer.used++;                              \
+        VAR = (TYPE *) BUFFER_CURRENT;              \
+        buffer.used += sizeof(TYPE);                \
     } while(0)
 
 static int le_phtrace;
@@ -131,12 +142,16 @@ PHP_RINIT_FUNCTION(phtrace)
     _zend_execute_ex = zend_execute_ex;
     zend_execute_ex = phtrace_execute_ex;
 
+    _zend_execute_internal = zend_execute_internal;
+    zend_execute_internal = phtrace_execute_internal;
+
     return SUCCESS;
 }
 
 PHP_RSHUTDOWN_FUNCTION(phtrace)
 {
     zend_execute_ex = _zend_execute_ex;
+    zend_execute_internal = _zend_execute_internal;
 
     buffer_flush();
     zend_hash_clean(&stringsCache);
@@ -187,6 +202,12 @@ ZEND_GET_MODULE(phtrace)
 static void phtrace_execute_ex(zend_execute_data *execute_data) {
     emit_event_function_call_begin(execute_data);
     _zend_execute_ex(execute_data);
+    emit_event_function_call_end();
+}
+
+static void phtrace_execute_internal(zend_execute_data *execute_data, zval *return_value) {
+    emit_event_internal_function_call_begin(execute_data);
+    EX(func)->internal_function.handler(execute_data, return_value);
     emit_event_function_call_end();
 }
 
@@ -291,6 +312,21 @@ static inline void emit_event_function_call_begin(zend_execute_data *execute_dat
     e->function_name = function_name;
     e->class_name = class_name;
     e->line_start = EX(func)->op_array.line_start;
+}
+
+static inline void emit_event_internal_function_call_begin(zend_execute_data *execute_data) {
+    uint32_t function_name = emit_event_data_zstr_cached(EX(func)->common.function_name);
+    uint32_t class_name = 0;
+    if (EX(func)->common.scope) {
+        class_name = emit_event_data_zstr_cached(EX(func)->common.scope->name);
+    }
+
+    EventInternalFunctionCallBegin *e;
+    ALLOC_EVENT(e, EventInternalFunctionCallBegin);
+
+    e->tsc = rdtscp();
+    e->function_name = function_name;
+    e->class_name = class_name;
 }
 
 static inline void emit_event_function_call_end() {
