@@ -11,6 +11,7 @@
 #include <uuid/uuid.h>
 
 #include "php_phtrace.h"
+#include "buffer.h"
 
 #define PHT_EVENT_REQUEST_BEGIN 1
 #define PHT_EVENT_REQUEST_END   2
@@ -56,12 +57,6 @@ static void (*_zend_execute_internal)(zend_execute_data *, zval *);
 
 static inline uint64_t rdtscp();
 
-static void buffer_allocate();
-static void buffer_free();
-static void buffer_flush();
-static inline void buffer_ensure_size(size_t);
-static void buffer_print_last_bytes(size_t);
-
 static inline uint32_t emit_event_data_zstr(zend_string *);
 static inline uint32_t emit_event_data_zstr_cached(zend_string *s);
 
@@ -71,26 +66,8 @@ static inline void emit_event_call_end();
 
 ZEND_DECLARE_MODULE_GLOBALS(phtrace)
 
-struct {
-    size_t size;
-    size_t used;
-    unsigned char *data;
-} buffer;
-
-#define BUFFER_CURRENT (buffer.data + buffer.used)
-
-#define ALLOC_EVENT(VAR, TYPE)                      \
-    do {                                            \
-        buffer_ensure_size(1 + sizeof(TYPE));       \
-        buffer.data[buffer.used] = EventTypes.TYPE; \
-        buffer.used++;                              \
-        VAR = (TYPE *) BUFFER_CURRENT;              \
-        buffer.used += sizeof(TYPE);                \
-    } while(0)
-
 static int le_phtrace;
 
-FILE *f;
 uint32_t stringCounter;
 HashTable stringsCache;
 
@@ -119,13 +96,13 @@ PHP_MINIT_FUNCTION(phtrace)
 {
     REGISTER_INI_ENTRIES();
     ZEND_INIT_SYMTABLE_EX(&stringsCache, 1000, 1);
-    buffer_allocate();
+    phtrace_buffer_allocate();
     return SUCCESS;
 }
 
 PHP_MSHUTDOWN_FUNCTION(phtrace)
 {
-    buffer_free();
+    phtrace_buffer_free();
     zend_hash_destroy(&stringsCache);
     UNREGISTER_INI_ENTRIES();
     return SUCCESS;
@@ -153,13 +130,8 @@ PHP_RSHUTDOWN_FUNCTION(phtrace)
     zend_execute_ex = _zend_execute_ex;
     zend_execute_internal = _zend_execute_internal;
 
-    buffer_flush();
+    phtrace_buffer_flush();
     zend_hash_clean(&stringsCache);
-
-    if (f) {
-      fclose(f);
-      f = NULL;
-    }
 
     return SUCCESS;
 }
@@ -217,66 +189,18 @@ static inline uint64_t rdtscp() {
     return (rdx << 32) + rax;
 }
 
-static void buffer_allocate() {
-    size_t size = 1024 * 1024 * 5;
-//    size_t size = 16384;
-    buffer.data = (unsigned char *) malloc(size);
-    if (!buffer.data) {
-        // TODO: find a proper way to signal about errors
-        printf("failed to allocate memory for the data buffer\n");
-    }
-
-    buffer.size = size;
-    buffer.used = 0;
-}
-
-static void buffer_free() {
-    if (buffer.data) {
-        free(buffer.data);
-        buffer.data = NULL;
-    }
-
-    buffer.size = 0;
-    buffer.used = 0;
-}
-
-static void buffer_flush() {
-    if (buffer.used == 0) {
-        return;
-    }
-    if (!f) {
-        f = fopen("/tmp/phtrace.phtrace", "w");
-    }
-    fwrite(buffer.data, 1, buffer.used, f);
-    fflush(f);
-
-    buffer.used = 0;
-}
-
-static void buffer_print_last_bytes(size_t n) {
-    for (int i = buffer.used - n; i < buffer.used; i++) {
-        printf("%02hhx ", buffer.data[i]);
-    }
-}
-
-static inline void buffer_ensure_size(size_t size) {
-    if (buffer.size - size < buffer.used) {
-        buffer_flush();
-    }
-}
-
 static inline uint32_t emit_event_data_zstr(zend_string *s) {
     stringCounter++;
 
-    buffer_ensure_size(1 + sizeof(uint32_t) + ZSTR_LEN(s) + 1);
-    buffer.data[buffer.used] = PHT_EVENT_DATA_STR;
-    buffer.used++;
+    phtrace_buffer_ensure_size(1 + sizeof(uint32_t) + ZSTR_LEN(s) + 1);
+    phtrace_buffer.data[phtrace_buffer.used] = PHT_EVENT_DATA_STR;
+    phtrace_buffer.used++;
 
-    *((uint32_t *) BUFFER_CURRENT) = stringCounter;
-    buffer.used += sizeof(uint32_t);
+    *((uint32_t *) PHTRACE_BUFFER_CURRENT) = stringCounter;
+    phtrace_buffer.used += sizeof(uint32_t);
 
-    strncpy((char *) BUFFER_CURRENT, ZSTR_VAL(s), ZSTR_LEN(s) + 1);
-    buffer.used += ZSTR_LEN(s) + 1;
+    strncpy((char *) PHTRACE_BUFFER_CURRENT, ZSTR_VAL(s), ZSTR_LEN(s) + 1);
+    phtrace_buffer.used += ZSTR_LEN(s) + 1;
 
     return stringCounter;
 }
@@ -305,7 +229,7 @@ static inline void emit_event_call_begin(zend_execute_data *execute_data) {
     }
 
     EventCallBegin *e;
-    ALLOC_EVENT(e, EventCallBegin);
+    PHTRACE_ALLOC_EVENT(e, EventCallBegin);
 
     e->tsc = rdtscp();
     e->filename = filename;
@@ -322,7 +246,7 @@ static inline void emit_event_icall_begin(zend_execute_data *execute_data) {
     }
 
     EventICallEnd *e;
-    ALLOC_EVENT(e, EventICallEnd);
+    PHTRACE_ALLOC_EVENT(e, EventICallEnd);
 
     e->tsc = rdtscp();
     e->function_name = function_name;
@@ -331,6 +255,6 @@ static inline void emit_event_icall_begin(zend_execute_data *execute_data) {
 
 static inline void emit_event_call_end() {
     EventCallEnd *e;
-    ALLOC_EVENT(e, EventCallEnd);
+    PHTRACE_ALLOC_EVENT(e, EventCallEnd);
     e->tsc = rdtscp();
 }

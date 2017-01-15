@@ -6,7 +6,7 @@ Make sure that the comment is aligned:
 [  --enable-phtrace           Enable phtrace support])
 
 if test "$PHP_PHTRACE" != "no"; then
-  PHP_NEW_EXTENSION(phtrace, phtrace.c, $ext_shared,, -std=c99 -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
+  PHP_NEW_EXTENSION(phtrace, phtrace.c buffer.c, $ext_shared,, -std=c99 -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
 
   PHTRACE_OLD_LIBS=$LIBS
   LIBS=
