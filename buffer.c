@@ -2,10 +2,9 @@
 #include <stdio.h>
 #include "buffer.h"
 
-
 phtrace_buffer_t phtrace_buffer;
 
-FILE *f;
+static FILE *f;
 
 void phtrace_buffer_allocate() {
     size_t size = 1024 * 1024 * 5;

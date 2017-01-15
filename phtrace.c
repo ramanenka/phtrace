@@ -22,7 +22,7 @@
 
 typedef unsigned char pht_event_t;
 
-struct {
+static struct {
     pht_event_t EventCallBegin;
     pht_event_t EventCallEnd;
     pht_event_t EventICallEnd;
@@ -68,8 +68,8 @@ ZEND_DECLARE_MODULE_GLOBALS(phtrace)
 
 static int le_phtrace;
 
-uint32_t stringCounter;
-HashTable stringsCache;
+static uint32_t stringCounter;
+static HashTable stringsCache;
 
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("phtrace.global_value",      "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_phtrace_globals, phtrace_globals)
@@ -130,7 +130,7 @@ PHP_RSHUTDOWN_FUNCTION(phtrace)
     zend_execute_ex = _zend_execute_ex;
     zend_execute_internal = _zend_execute_internal;
 
-    phtrace_buffer_flush();
+    phtrace_buffer_close();
     zend_hash_clean(&stringsCache);
 
     return SUCCESS;
@@ -169,7 +169,6 @@ ZEND_TSRMLS_CACHE_DEFINE()
 #endif
 ZEND_GET_MODULE(phtrace)
 #endif
-
 
 static void phtrace_execute_ex(zend_execute_data *execute_data) {
     emit_event_call_begin(execute_data);

@@ -69,3 +69,4 @@ tests/*/*.sh
 .cproject
 .project
 .settings/
+test.php
