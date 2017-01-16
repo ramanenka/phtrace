@@ -16,7 +16,7 @@ void phtrace_buffer_free();
 void phtrace_buffer_flush();
 void phtrace_buffer_close();
 
-inline void phtrace_buffer_ensure_size(size_t size) {
+static inline void phtrace_buffer_ensure_size(size_t size) {
     if (phtrace_buffer.size - size < phtrace_buffer.used) {
         phtrace_buffer_flush();
     }
