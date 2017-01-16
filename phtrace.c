@@ -15,6 +15,7 @@
 
 #define PHT_EVENT_REQUEST_BEGIN 1
 #define PHT_EVENT_REQUEST_END   2
+#define PHT_EVENT_COMPILE_FILE_BEGIN 7
 #define PHT_EVENT_CALL_BEGIN    3
 #define PHT_EVENT_ICALL_BEGIN   6
 #define PHT_EVENT_CALL_END      4
@@ -23,14 +24,24 @@
 typedef unsigned char pht_event_t;
 
 static struct {
+    pht_event_t EventCompileFileBegin;
     pht_event_t EventCallBegin;
     pht_event_t EventCallEnd;
     pht_event_t EventICallEnd;
+
 } EventTypes = {
+    PHT_EVENT_COMPILE_FILE_BEGIN,
     PHT_EVENT_CALL_BEGIN,
     PHT_EVENT_CALL_END,
     PHT_EVENT_ICALL_BEGIN
 };
+
+typedef struct _EventCompileFileBegin {
+    uint64_t tsc;
+    uint32_t filename;
+    // for memory padding:
+    uint32_t _dummy;
+} EventCompileFileBegin;
 
 typedef struct _EventCallBegin {
     uint64_t tsc;
@@ -50,6 +61,8 @@ typedef struct _EventCallEnd {
     uint64_t tsc;
 } EventCallEnd;
 
+static zend_op_array *phtrace_compile_file(zend_file_handle *, int);
+static zend_op_array *(*_zend_compile_file)(zend_file_handle *, int);
 static void phtrace_execute_ex(zend_execute_data *);
 static void (*_zend_execute_ex) (zend_execute_data *);
 static void phtrace_execute_internal(zend_execute_data *, zval *);
@@ -57,9 +70,11 @@ static void (*_zend_execute_internal)(zend_execute_data *, zval *);
 
 static inline uint64_t rdtscp();
 
+static inline uint32_t emit_event_data_str(const char *, size_t);
 static inline uint32_t emit_event_data_zstr(zend_string *);
 static inline uint32_t emit_event_data_zstr_cached(zend_string *s);
 
+static inline void emit_event_compile_file_begin(zend_file_handle *);
 static inline void emit_event_call_begin(zend_execute_data *);
 static inline void emit_event_icall_begin(zend_execute_data *);
 static inline void emit_event_call_end();
@@ -116,6 +131,9 @@ PHP_RINIT_FUNCTION(phtrace)
 
     stringCounter = 0;
 
+    _zend_compile_file = zend_compile_file;
+    zend_compile_file = phtrace_compile_file;
+
     _zend_execute_ex = zend_execute_ex;
     zend_execute_ex = phtrace_execute_ex;
 
@@ -127,6 +145,7 @@ PHP_RINIT_FUNCTION(phtrace)
 
 PHP_RSHUTDOWN_FUNCTION(phtrace)
 {
+    zend_compile_file = _zend_compile_file;
     zend_execute_ex = _zend_execute_ex;
     zend_execute_internal = _zend_execute_internal;
 
@@ -170,6 +189,13 @@ ZEND_TSRMLS_CACHE_DEFINE()
 ZEND_GET_MODULE(phtrace)
 #endif
 
+static zend_op_array *phtrace_compile_file(zend_file_handle *file_handle, int type) {
+    emit_event_compile_file_begin(file_handle);
+    zend_op_array *result = _zend_compile_file(file_handle, type);
+    emit_event_call_end();
+    return result;
+}
+
 static void phtrace_execute_ex(zend_execute_data *execute_data) {
     emit_event_call_begin(execute_data);
     _zend_execute_ex(execute_data);
@@ -178,6 +204,7 @@ static void phtrace_execute_ex(zend_execute_data *execute_data) {
 
 static void phtrace_execute_internal(zend_execute_data *execute_data, zval *return_value) {
     emit_event_icall_begin(execute_data);
+    // TODO: _zend_execute_internal might not be NULL, so it has to be called in this case
     EX(func)->internal_function.handler(execute_data, return_value);
     emit_event_call_end();
 }
@@ -188,20 +215,24 @@ static inline uint64_t rdtscp() {
     return (rdx << 32) + rax;
 }
 
-static inline uint32_t emit_event_data_zstr(zend_string *s) {
+static inline uint32_t emit_event_data_str(const char *s, size_t len) {
     stringCounter++;
 
-    phtrace_buffer_ensure_size(1 + sizeof(uint32_t) + ZSTR_LEN(s) + 1);
+    phtrace_buffer_ensure_size(1 + sizeof(uint32_t) + len + 1);
     phtrace_buffer.data[phtrace_buffer.used] = PHT_EVENT_DATA_STR;
     phtrace_buffer.used++;
 
     *((uint32_t *) PHTRACE_BUFFER_CURRENT) = stringCounter;
     phtrace_buffer.used += sizeof(uint32_t);
 
-    strncpy((char *) PHTRACE_BUFFER_CURRENT, ZSTR_VAL(s), ZSTR_LEN(s) + 1);
-    phtrace_buffer.used += ZSTR_LEN(s) + 1;
+    strncpy((char *) PHTRACE_BUFFER_CURRENT, s, len + 1);
+    phtrace_buffer.used += len + 1;
 
     return stringCounter;
+}
+
+static inline uint32_t emit_event_data_zstr(zend_string *s) {
+    return emit_event_data_str(ZSTR_VAL(s), ZSTR_LEN(s));
 }
 
 static inline uint32_t emit_event_data_zstr_cached(zend_string *s) {
@@ -214,6 +245,21 @@ static inline uint32_t emit_event_data_zstr_cached(zend_string *s) {
         zend_hash_add_new(&stringsCache, s, &n);
         return Z_LVAL(n);
     }
+}
+
+static inline void emit_event_compile_file_begin(zend_file_handle *file_handle) {
+    uint32_t filename = 0;
+    if (file_handle->opened_path) {
+        filename = emit_event_data_zstr(file_handle->opened_path);
+    } else {
+        // TODO: check for cases when there is no filename
+        filename = emit_event_data_str(file_handle->filename, strlen(file_handle->filename));
+    }
+
+    EventCompileFileBegin *e;
+    PHTRACE_ALLOC_EVENT(e, EventCompileFileBegin);
+    e->tsc = rdtscp();
+    e->filename = filename;
 }
 
 static inline void emit_event_call_begin(zend_execute_data *execute_data) {
