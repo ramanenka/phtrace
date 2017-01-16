@@ -204,8 +204,13 @@ static void phtrace_execute_ex(zend_execute_data *execute_data) {
 
 static void phtrace_execute_internal(zend_execute_data *execute_data, zval *return_value) {
     emit_event_icall_begin(execute_data);
-    // TODO: _zend_execute_internal might not be NULL, so it has to be called in this case
-    EX(func)->internal_function.handler(execute_data, return_value);
+
+    if (!_zend_execute_internal) {
+        EX(func)->internal_function.handler(execute_data, return_value);
+    } else {
+        _zend_execute_internal(execute_data, return_value);
+    }
+
     emit_event_end();
 }
 
