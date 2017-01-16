@@ -18,7 +18,7 @@
 #define PHT_EVENT_COMPILE_FILE_BEGIN 7
 #define PHT_EVENT_CALL_BEGIN    3
 #define PHT_EVENT_ICALL_BEGIN   6
-#define PHT_EVENT_CALL_END      4
+#define PHT_EVENT_END      4
 #define PHT_EVENT_DATA_STR      5
 
 typedef unsigned char pht_event_t;
@@ -26,13 +26,13 @@ typedef unsigned char pht_event_t;
 static struct {
     pht_event_t EventCompileFileBegin;
     pht_event_t EventCallBegin;
-    pht_event_t EventCallEnd;
+    pht_event_t EventEnd;
     pht_event_t EventICallEnd;
 
 } EventTypes = {
     PHT_EVENT_COMPILE_FILE_BEGIN,
     PHT_EVENT_CALL_BEGIN,
-    PHT_EVENT_CALL_END,
+    PHT_EVENT_END,
     PHT_EVENT_ICALL_BEGIN
 };
 
@@ -57,9 +57,9 @@ typedef struct _EventICallBegin {
     uint32_t class_name;
 } EventICallEnd;
 
-typedef struct _EventCallEnd {
+typedef struct _EventEnd {
     uint64_t tsc;
-} EventCallEnd;
+} EventEnd;
 
 static zend_op_array *phtrace_compile_file(zend_file_handle *, int);
 static zend_op_array *(*_zend_compile_file)(zend_file_handle *, int);
@@ -77,7 +77,7 @@ static inline uint32_t emit_event_data_zstr_cached(zend_string *s);
 static inline void emit_event_compile_file_begin(zend_file_handle *);
 static inline void emit_event_call_begin(zend_execute_data *);
 static inline void emit_event_icall_begin(zend_execute_data *);
-static inline void emit_event_call_end();
+static inline void emit_event_end();
 
 ZEND_DECLARE_MODULE_GLOBALS(phtrace)
 
@@ -192,21 +192,21 @@ ZEND_GET_MODULE(phtrace)
 static zend_op_array *phtrace_compile_file(zend_file_handle *file_handle, int type) {
     emit_event_compile_file_begin(file_handle);
     zend_op_array *result = _zend_compile_file(file_handle, type);
-    emit_event_call_end();
+    emit_event_end();
     return result;
 }
 
 static void phtrace_execute_ex(zend_execute_data *execute_data) {
     emit_event_call_begin(execute_data);
     _zend_execute_ex(execute_data);
-    emit_event_call_end();
+    emit_event_end();
 }
 
 static void phtrace_execute_internal(zend_execute_data *execute_data, zval *return_value) {
     emit_event_icall_begin(execute_data);
     // TODO: _zend_execute_internal might not be NULL, so it has to be called in this case
     EX(func)->internal_function.handler(execute_data, return_value);
-    emit_event_call_end();
+    emit_event_end();
 }
 
 static inline uint64_t rdtscp() {
@@ -298,8 +298,8 @@ static inline void emit_event_icall_begin(zend_execute_data *execute_data) {
     e->class_name = class_name;
 }
 
-static inline void emit_event_call_end() {
-    EventCallEnd *e;
-    PHTRACE_ALLOC_EVENT(e, EventCallEnd);
+static inline void emit_event_end() {
+    EventEnd *e;
+    PHTRACE_ALLOC_EVENT(e, EventEnd);
     e->tsc = rdtscp();
 }
