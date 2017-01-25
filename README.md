@@ -1,4 +1,4 @@
-# phtrace
+# phtrace ![Build status](https://api.travis-ci.org/vadd/phtrace.svg?branch=master)
 
 The phtrace extension provides a way to record the trace of a php script
 execution. It records function call timing which allows to build flame graphs.
