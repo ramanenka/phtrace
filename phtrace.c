@@ -27,8 +27,7 @@ static struct {
     pht_event_t EventCompileFileBegin;
     pht_event_t EventCallBegin;
     pht_event_t EventEnd;
-    pht_event_t EventICallEnd;
-
+    pht_event_t EventICallBegin;
 } EventTypes = {
     PHT_EVENT_COMPILE_FILE_BEGIN,
     PHT_EVENT_CALL_BEGIN,
@@ -55,7 +54,7 @@ typedef struct _EventICallBegin {
     uint64_t tsc;
     uint32_t function_name;
     uint32_t class_name;
-} EventICallEnd;
+} EventICallBegin;
 
 typedef struct _EventEnd {
     uint64_t tsc;
@@ -295,8 +294,8 @@ static inline void emit_event_icall_begin(zend_execute_data *execute_data) {
         class_name = emit_event_data_zstr_cached(EX(func)->common.scope->name);
     }
 
-    EventICallEnd *e;
-    PHTRACE_ALLOC_EVENT(e, EventICallEnd);
+    EventICallBegin *e;
+    PHTRACE_ALLOC_EVENT(e, EventICallBegin);
 
     e->tsc = rdtscp();
     e->function_name = function_name;
