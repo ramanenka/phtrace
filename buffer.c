@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "buffer.h"
+#include <uuid/uuid.h>
 
 phtrace_buffer_t phtrace_buffer;
 
@@ -33,7 +34,15 @@ void phtrace_buffer_flush() {
         return;
     }
     if (!f) {
-        f = fopen("/tmp/phtrace.phtrace", "w");
+        uuid_t uuid;
+        uuid_generate(uuid);
+        char uuid_str[37];
+        uuid_unparse_lower(uuid, uuid_str);
+
+        char filename[100];
+        sprintf(filename, "/tmp/%s.phtrace", uuid_str);
+
+        f = fopen(filename, "w");
     }
     fwrite(phtrace_buffer.data, 1, phtrace_buffer.used, f);
     fflush(f);
