@@ -20,16 +20,28 @@
 typedef unsigned char pht_event_t;
 
 static struct {
+    pht_event_t EventRequestBegin;
+    pht_event_t EventRequestEnd;
     pht_event_t EventCompileFileBegin;
     pht_event_t EventCallBegin;
     pht_event_t EventEnd;
     pht_event_t EventICallBegin;
 } EventTypes = {
+    PHT_EVENT_REQUEST_BEGIN,
+    PHT_EVENT_REQUEST_END,
     PHT_EVENT_COMPILE_FILE_BEGIN,
     PHT_EVENT_CALL_BEGIN,
     PHT_EVENT_END,
     PHT_EVENT_ICALL_BEGIN
 };
+
+typedef struct _EventRequestBegin {
+    uint64_t tsc;
+} EventRequestBegin;
+
+typedef struct _EventRequestEnd {
+    uint64_t tsc;
+} EventRequestEnd;
 
 typedef struct _EventCompileFileBegin {
     uint64_t tsc;
@@ -69,6 +81,8 @@ static inline uint32_t emit_event_data_str(const char *, size_t);
 static inline uint32_t emit_event_data_zstr(zend_string *);
 static inline uint32_t emit_event_data_zstr_cached(zend_string *s);
 
+static inline void emit_event_request_begin();
+static inline void emit_event_request_end();
 static inline void emit_event_compile_file_begin(zend_file_handle *);
 static inline void emit_event_call_begin(zend_execute_data *);
 static inline void emit_event_icall_begin(zend_execute_data *);
@@ -135,11 +149,13 @@ PHP_RINIT_FUNCTION(phtrace)
     _zend_execute_internal = zend_execute_internal;
     zend_execute_internal = phtrace_execute_internal;
 
+    emit_event_request_begin();
     return SUCCESS;
 }
 
 PHP_RSHUTDOWN_FUNCTION(phtrace)
 {
+    emit_event_request_end();
     zend_compile_file = _zend_compile_file;
     zend_execute_ex = _zend_execute_ex;
     zend_execute_internal = _zend_execute_internal;
@@ -245,6 +261,18 @@ static inline uint32_t emit_event_data_zstr_cached(zend_string *s) {
         zend_hash_add_new(&stringsCache, s, &n);
         return Z_LVAL(n);
     }
+}
+
+static inline void emit_event_request_begin() {
+    EventRequestBegin *e;
+    PHTRACE_ALLOC_EVENT(e, EventRequestBegin);
+    e->tsc = rdtscp();
+}
+
+static inline void emit_event_request_end() {
+    EventRequestEnd *e;
+    PHTRACE_ALLOC_EVENT(e, EventRequestEnd);
+    e->tsc = rdtscp();
 }
 
 static inline void emit_event_compile_file_begin(zend_file_handle *file_handle) {
